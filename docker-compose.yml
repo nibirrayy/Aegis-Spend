@@ -1,0 +1,59 @@
+version: '3.8' # Specify the Docker Compose file format version
+
+services:
+  # PostgreSQL Database Service for NocoDB and Grafana
+  db:
+    image: postgres:13 # Using PostgreSQL version 13
+    container_name: aegis_db # Assign a friendly name to the container
+    restart: unless-stopped # Always restart the container unless it's explicitly stopped
+    environment:
+      POSTGRES_DB: nocodb_db       # Database name for NocoDB and Grafana to connect to
+      POSTGRES_USER: nocouser      # Username for database access
+      POSTGRES_PASSWORD: nocopassword # Password for database user (CHANGE THIS!)
+    ports:
+      - "5432:5432" # Map host port 5432 to container port 5432 (optional, but useful for direct DB access)
+    volumes:
+      - db_data:/var/lib/postgresql/data # Persistent volume for database data
+
+  # NocoDB Application Service
+  nocodb:
+    image: nocodb/nocodb:latest # Use the latest NocoDB image
+    container_name: aegis_nocodb # Assign a friendly name
+    restart: unless-stopped # Always restart the container unless it's explicitly stopped
+    ports:
+      - "8080:8080" # Map host port 8080 to container port 8080 (NocoDB UI)
+    environment:
+      # Using a single DATABASE_URL for NocoDB connection
+      # This format is: pg://user:password@host:port/database
+      NC_DATABASE_URL: "pg://nocouser:nocopassword@db:5432/nocodb_db" # Explicit DB URL (CHANGE PASSWORD!)
+      # The individual NC_PG_* variables are not needed when NC_DATABASE_URL is used.
+    depends_on:
+      - db # Ensure the database service starts before NocoDB
+    volumes:
+      - nocodb_data:/usr/app/data # Persistent volume for NocoDB's internal data (e.g., project config)
+
+  # Grafana Visualization Service
+  grafana:
+    image: grafana/grafana:latest # Use the latest Grafana image
+    container_name: aegis_grafana # Assign a friendly name
+    restart: unless-stopped # Always restart the container unless it's explicitly stopped
+    ports:
+      - "3000:3000" # Map host port 3000 to container port 3000 (Grafana UI)
+    environment:
+      GF_SECURITY_ADMIN_USER: admin # Default Grafana admin username
+      GF_SECURITY_ADMIN_PASSWORD: supersecretpassword # Default Grafana admin password (***CHANGE THIS IN PRODUCTION!***)
+      GF_PATHS_DATA: /var/lib/grafana # Path for Grafana data persistence
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning # Path for provisioning config
+    depends_on:
+      - db # Ensure the database service starts before Grafana
+    volumes:
+      - grafana_data:/var/lib/grafana # Persistent volume for Grafana data (dashboards, configurations)
+      # Optional: Uncomment and create these local directories for advanced Grafana provisioning
+      # - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+      # - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+
+# Define named volumes for data persistence
+volumes:
+  db_data: # Volume for PostgreSQL data
+  nocodb_data: # Volume for NocoDB's internal data
+  grafana_data: # Volume for Grafana's data
